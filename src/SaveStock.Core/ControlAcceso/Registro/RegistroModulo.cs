@@ -9,7 +9,7 @@ public static class RegistroModulo
 {
     public static IServiceCollection AddRegistro(this IServiceCollection services)
     {
-        // Pendiente (#15): registrar aquí los servicios de esta feature.
+        services.AddScoped<ServicioRegistro>();
         return services;
     }
 }
