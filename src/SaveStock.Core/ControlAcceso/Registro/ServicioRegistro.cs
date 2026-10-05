@@ -8,8 +8,8 @@ using SaveStock.Core.Datos;
 namespace SaveStock.Core.ControlAcceso.Registro;
 
 /// <summary>
-/// Registro de cuentas (RF-CA-01, RF-CA-02, RF-CA-14, RF-CA-15) y activación por enlace
-/// (RF-CA-16). El correo de activación se deja en la cola: esta operación nunca habla con el servidor SMTP.
+/// Registro de cuentas (RF-CA-01, RF-CA-02, RF-CA-14, RF-CA-15), activación por enlace
+/// (RF-CA-16) y reenvío del enlace (RF-CA-17). El correo de activación se deja en la cola: esta operación nunca habla con el servidor SMTP.
 /// </summary>
 public class ServicioRegistro
 {
@@ -18,6 +18,7 @@ public class ServicioRegistro
     public const string AsuntoActivacion = "Activa tu cuenta de SaveStock";
     public const string MensajeCuentaActivada = "Tu cuenta fue activada. Ya puedes iniciar sesión.";
     public const string MensajeEnlaceInvalido = "El enlace no es válido, ya fue usado o venció.";
+    public const string MensajeReenvio = "Si el correo está registrado y la cuenta no está activa, te enviamos un nuevo enlace.";
 
     /// <summary>Cuánto dura el enlace de activación desde que se emite.</summary>
     public static readonly TimeSpan VigenciaTokenActivacion = TimeSpan.FromHours(24);
@@ -111,6 +112,43 @@ public class ServicioRegistro
         await _db.SaveChangesAsync();
 
         return Resultado.Ok(MensajeCuentaActivada);
+    }
+
+    /// <summary>
+    /// Reenvía el enlace de activación (RF-CA-17). Siempre responde el mismo mensaje, exista o no
+    /// el correo, para no revelar qué correos están registrados. Solo si la cuenta existe y todavía
+    /// no se activó, invalida los enlaces anteriores y encola uno nuevo.
+    /// </summary>
+    public async Task<Resultado> ReenviarActivacionAsync(SolicitudReenvioActivacion solicitud)
+    {
+        if (!ValidadorEntrada.ValidarCorreo(solicitud.Correo).Exito)
+        {
+            return Resultado.Ok(MensajeReenvio);
+        }
+
+        var correo = ValidadorEntrada.NormalizarCorreo(solicitud.Correo!);
+        var usuario = await _db.Usuarios.SingleOrDefaultAsync(u => u.Correo == correo);
+        if (usuario is null || usuario.FechaActivacion is not null)
+        {
+            return Resultado.Ok(MensajeReenvio);
+        }
+
+        // Los enlaces anteriores dejan de servir: solo vale el último que se envió.
+        var anteriores = await _db.TokensActivacion
+            .Where(t => t.UsuarioId == usuario.Id && !t.Usado && !t.Invalidado)
+            .ToListAsync();
+
+        await using var transaccion = await _db.Database.BeginTransactionAsync();
+        foreach (var anterior in anteriores)
+        {
+            anterior.Invalidado = true;
+        }
+
+        await _db.SaveChangesAsync();
+        await EmitirEnlaceActivacionAsync(usuario);
+        await transaccion.CommitAsync();
+
+        return Resultado.Ok(MensajeReenvio);
     }
 
     private static Resultado Validar(SolicitudRegistro solicitud)
