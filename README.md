@@ -67,3 +67,63 @@ Si falta alguna de las tres `SAVESTOCK_ADMIN_*`, no se crea el administrador ini
 3. En el `.env`: `SMTP_HOST=smtp.gmail.com`, `SMTP_PUERTO=587`, tu dirección de Gmail en
    `SMTP_USUARIO` y en `SMTP_REMITENTE`, y la contraseña de aplicación (16 letras, sin espacios) en
    `SMTP_CONTRASENA`. Nunca tu contraseña normal.
+
+## Ejecutar
+
+Son dos programas, cada uno en su terminal.
+
+**1. La web** (API, páginas y documentación):
+
+```bash
+dotnet run --project src/SaveStock.Web
+```
+
+Queda en <http://localhost:5080>. La documentación interactiva de la API está en
+<http://localhost:5080/scalar>. La primera vez crea `datos/savestock.db` y `datos/inventario.db`, y el
+administrador inicial de las variables `SAVESTOCK_ADMIN_*`. Los datos se conservan entre ejecuciones.
+
+**2. El enviador de correos:**
+
+```bash
+dotnet run --project src/SaveStock.Enviador
+```
+
+Toma los correos pendientes de la cola, los manda por SMTP, los marca como enviados y termina
+imprimiendo `Enviados: N, fallidos: M, pendientes: K`. **Hay que ejecutarlo cada vez que quieras que
+salgan los correos encolados** (activación, recuperación, restablecimiento forzado).
+
+Funciona así a propósito (RF-NOT-08, RF-NOT-09): ninguna operación de negocio manda correos. El registro
+o la recuperación solo guardan el correo en la tabla `CorreosEnCola` en estado `Pendiente` y responden
+enseguida, aunque el servidor SMTP no esté disponible. El envío lo hace este proceso aparte, y
+ejecutarlo dos veces no manda nada dos veces (RF-NOT-12). Si falta alguna variable `SMTP_*`, el enviador
+lo dice y termina con código de salida 1.
+
+### Interfaz web
+
+Además de la API, la web tiene páginas para usar el sistema desde el navegador:
+
+| Página | Para qué |
+|---|---|
+| `/` | Inicio |
+| `/registro` | Crear una cuenta |
+| `/reenviar-activacion` | Pedir otro enlace de activación |
+| `/iniciar-sesion` | Iniciar sesión |
+| `/perfil` | Ver mis datos, cerrar sesión y cambiar mi contraseña |
+| `/contrasena/recuperar` | Pedir un código de recuperación |
+| `/contrasena/restablecer` | Definir una contraseña nueva con el código |
+| `/admin/usuarios` | Administración de usuarios (solo Administrador) |
+
+Las verificaciones de abajo usan la API con `curl`: así se ve el código HTTP exacto y la petición se
+construye a mano, sin pasar por la interfaz (RD-06). Las páginas usan los mismos servicios del Core, con
+las mismas reglas.
+
+## Pruebas automáticas
+
+```bash
+dotnet test
+```
+
+Hay pruebas unitarias de los servicios del Core que no levantan la web (RD-12) y pruebas de integración
+que levantan la API en memoria con una base SQLite temporal. Cubren también lo que no se puede provocar
+a mano en pocos minutos: el vencimiento del bloqueo (15 minutos), del código de recuperación
+(15 minutos) y del enlace de activación (24 horas).
