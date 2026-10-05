@@ -28,6 +28,14 @@ public static class AdministracionEndpoints
                 Responder(await servicio.CambiarRolAsync(http.ObtenerUsuarioActual().Id, id, solicitud?.Rol)))
             .RequiereOperacion(Operacion.CambiarRol);
 
+        app.MapPost("/api/admin/usuarios/{id:int}/desactivar", async (int id, HttpContext http, ServicioAdministracionUsuarios servicio) =>
+                Responder(await servicio.DesactivarAsync(http.ObtenerUsuarioActual().Id, id)))
+            .RequiereOperacion(Operacion.DesactivarUsuario);
+
+        app.MapPost("/api/admin/usuarios/{id:int}/reactivar", async (int id, ServicioAdministracionUsuarios servicio) =>
+                Responder(await servicio.ReactivarAsync(id)))
+            .RequiereOperacion(Operacion.ReactivarUsuario);
+
         return app;
     }
 
