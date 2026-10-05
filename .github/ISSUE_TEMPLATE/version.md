@@ -16,4 +16,4 @@ labels: [epic]
 - [ ] #
 
 ## Criterio de cierre
-<!-- Al cerrar: release vN.0.0 (ver Versionado en CONTRIBUTING.md). -->
+<!-- Al cerrar el milestone: release vN.0.0. -->
