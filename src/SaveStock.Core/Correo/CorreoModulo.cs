@@ -8,9 +8,24 @@ namespace SaveStock.Core.Correo;
 /// </summary>
 public static class CorreoModulo
 {
+    /// <summary>
+    /// Lo que necesita cualquier proceso que use el Core. La web solo encola (ICorreoCola), así que
+    /// aquí no se registra nada que envíe correos: el envío nunca ocurre dentro de una operación (RF-NOT-08).
+    /// </summary>
     public static IServiceCollection AddCorreo(this IServiceCollection services)
     {
-        // Pendiente (#14): registrar aquí ProcesadorColaCorreos.
+        return services;
+    }
+
+    /// <summary>
+    /// Registra el procesador de la cola con el enviador indicado. Solo lo llama SaveStock.Enviador,
+    /// que es el proceso aparte que manda los correos (RF-NOT-09).
+    /// </summary>
+    public static IServiceCollection AddProcesadorColaCorreos<TEnviador>(this IServiceCollection services)
+        where TEnviador : class, IEnviadorCorreo
+    {
+        services.AddScoped<IEnviadorCorreo, TEnviador>();
+        services.AddScoped<ProcesadorColaCorreos>();
         return services;
     }
 }
