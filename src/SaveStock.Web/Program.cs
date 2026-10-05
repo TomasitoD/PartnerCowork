@@ -44,6 +44,7 @@ await InicializadorBaseDatos.InicializarAsync(app.Services);
 
 app.MapOpenApi();
 app.MapScalarApiReference(); // Documentación interactiva en /scalar
+app.UseStaticFiles(); // Estilos de las páginas (wwwroot/css/sitio.css)
 app.MapRazorPages();
 
 // Un archivo de endpoints por feature.
