@@ -9,7 +9,7 @@ public static class ContrasenasModulo
 {
     public static IServiceCollection AddContrasenas(this IServiceCollection services)
     {
-        // Pendiente (#18): registrar aquí los servicios de esta feature.
+        services.AddScoped<ServicioContrasenas>();
         return services;
     }
 }
