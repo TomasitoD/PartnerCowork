@@ -52,11 +52,21 @@ public class EnviadorSmtp : IEnviadorCorreo
             await cliente.ConnectAsync(_smtp.Host, _smtp.Puerto, SecureSocketOptions.Auto, cancelacion);
             await cliente.AuthenticateAsync(_smtp.Usuario, _smtp.Contrasena, cancelacion);
             await cliente.SendAsync(mensaje, cancelacion);
-            await cliente.DisconnectAsync(quit: true, cancelacion);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancelacion.IsCancellationRequested)
         {
             throw new ErrorEnvioCorreoException(Traducir(ex), ex);
+        }
+
+        // El correo ya se entregó: si falla el cierre de la conexión no es un fallo de envío.
+        // Informarlo como fallo lo devolvería a Pendiente y se enviaría dos veces (RF-NOT-12).
+        try
+        {
+            await cliente.DisconnectAsync(quit: true, CancellationToken.None);
+        }
+        catch (Exception)
+        {
+            // Se ignora a propósito: la conexión se libera igual al salir del using.
         }
     }
 
