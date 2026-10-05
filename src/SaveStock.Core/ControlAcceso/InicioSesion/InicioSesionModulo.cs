@@ -12,7 +12,7 @@ public static class InicioSesionModulo
 {
     public static IServiceCollection AddInicioSesion(this IServiceCollection services)
     {
-        // Pendiente (#16): registrar aquí los servicios de esta feature.
+        services.AddScoped<ServicioInicioSesion>();
         return services;
     }
 }
