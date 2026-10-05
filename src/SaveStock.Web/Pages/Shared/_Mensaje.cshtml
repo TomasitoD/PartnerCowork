@@ -1,0 +1,6 @@
+@model MensajePagina?
+@* Muestra el mensaje que devolvió el servicio del Core (éxito o error). Nunca una excepción (RD-08). *@
+@if (Model is not null)
+{
+    <p class="mensaje @(Model.Exito ? "exito" : "error")" role="status">@Model.Texto</p>
+}

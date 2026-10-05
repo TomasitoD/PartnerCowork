@@ -1,0 +1,10 @@
+@model string
+@* Página que ve quien intenta una operación sin permiso (403). La arma PaginaSaveStock. *@
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Sin permiso";
+}
+
+<h1>Acceso denegado</h1>
+<p class="mensaje error" role="alert">@Model</p>
+<p><a href="/">Volver al inicio</a></p>
