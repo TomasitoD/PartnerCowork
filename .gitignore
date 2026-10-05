@@ -3,8 +3,15 @@
 ##
 ## Get latest from `dotnet new gitignore`
 
-# dotenv files
+# dotenv files (las credenciales nunca se suben; .env.example sí)
 .env
+!.env.example
+
+# Bases de datos SQLite locales de SaveStock
+/datos/
+*.db
+*.db-shm
+*.db-wal
 
 # User-specific files
 *.rsuser
