@@ -37,7 +37,14 @@ public class EnviadorSmtp : IEnviadorCorreo
         mensaje.Subject = asunto;
         mensaje.Body = new TextPart(TextFormat.Plain) { Text = cuerpo };
 
-        using var cliente = new SmtpClient { Timeout = TiempoEsperaMilisegundos };
+        // La consulta en línea de revocación del certificado queda incompleta en macOS y MailKit rechaza
+        // la conexión aunque el certificado sea válido. La cadena del certificado y el nombre del host
+        // se siguen validando; solo se omite esa consulta.
+        using var cliente = new SmtpClient
+        {
+            Timeout = TiempoEsperaMilisegundos,
+            CheckCertificateRevocation = false,
+        };
 
         try
         {
