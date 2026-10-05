@@ -24,6 +24,8 @@ public class ServicioContrasenas
     public const string MensajeActualIncorrecta = "La contraseña actual no es correcta.";
     public const string MensajeCambiada = "Contraseña actualizada. Inicia sesión de nuevo.";
     public const string MensajeUsuarioNoEncontrado = "No existe un usuario con ese id.";
+    public const string AsuntoForzado = "Un administrador restableció tu contraseña de SaveStock";
+    public const string MensajeForzado = "Se restableció la contraseña y se le envió al usuario un código para definir una nueva.";
 
     private readonly CoreDbContext _db;
     private readonly IReloj _reloj;
@@ -158,6 +160,32 @@ public class ServicioContrasenas
         await _sesiones.RevocarTodasAsync(usuario.Id);
 
         return Resultado.Ok(MensajeCambiada);
+    }
+
+    /// <summary>
+    /// Restablecimiento forzado por un administrador (RF-CA-13): reemplaza el hash por el de una
+    /// contraseña aleatoria que nadie conoce (la anterior deja de servir), revoca las sesiones,
+    /// invalida los códigos anteriores y encola un código nuevo para que el usuario defina la suya.
+    /// </summary>
+    public async Task<Resultado> ForzarRestablecimientoAsync(int usuarioId)
+    {
+        var usuario = await _db.Usuarios.FindAsync(usuarioId);
+        if (usuario is null)
+        {
+            return Resultado.Error(TipoError.NoEncontrado, MensajeUsuarioNoEncontrado);
+        }
+
+        usuario.HashContrasena = HasherContrasenas.Hashear(GeneradorTokens.GenerarContrasenaAleatoria());
+        var codigo = EmitirCodigo(usuario, OrigenCodigoRecuperacion.Administrador);
+        await _sesiones.RevocarTodasAsync(usuario.Id);
+
+        var cuerpo = $"Hola, {usuario.Nombre}:\n\n"
+            + "Un administrador restableció la contraseña de tu cuenta de SaveStock. Tu contraseña anterior ya no sirve "
+            + "y se cerraron todas tus sesiones.\n\n"
+            + InstruccionesCodigo(usuario, codigo);
+        await _correos.EncolarAsync(usuario.Correo, AsuntoForzado, cuerpo);
+
+        return Resultado.Ok(MensajeForzado);
     }
 
     /// <summary>

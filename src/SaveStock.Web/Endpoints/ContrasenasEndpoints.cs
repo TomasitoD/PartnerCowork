@@ -28,6 +28,10 @@ public static class ContrasenasEndpoints
                 Responder(await servicio.CambiarAsync(http.ObtenerUsuarioActual().Id, solicitud)))
             .RequiereOperacion(Operacion.CambiarContrasena);
 
+        app.MapPost("/api/admin/usuarios/{id:int}/forzar-restablecimiento", async (int id, ServicioContrasenas servicio) =>
+                Responder(await servicio.ForzarRestablecimientoAsync(id)))
+            .RequiereOperacion(Operacion.ForzarRestablecimiento);
+
         return app;
     }
 
