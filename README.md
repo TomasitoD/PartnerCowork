@@ -295,3 +295,93 @@ Ninguna fila contiene la contraseña (`$CONTRASENA`). El valor guardado tiene la
 `pbkdf2-sha256$100000$<sal>$<hash>`: PBKDF2-SHA256 con 100.000 iteraciones y una sal aleatoria de
 16 bytes por usuario, que no se puede revertir a la contraseña. **Tu fila y la de Luis tienen la misma
 contraseña y valores distintos**, porque cada una tiene su propia sal.
+
+### 2. Sesión (RF-CA-03, RF-CA-07, RF-CA-18, RF-CA-19)
+
+**2.1 Contraseña incorrecta y correo inexistente (RF-CA-03).**
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"incorrecta1\"}"
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"nadie@example.com\",\"contrasena\":\"$CONTRASENA\"}"
+```
+
+Los dos rechazos son idénticos y no dicen cuál dato falló:
+`{"mensaje":"Correo o contraseña incorrectos."} -> 401`.
+
+**2.2 Iniciar sesión y consultar quién soy (RF-CA-03, RF-CA-07).** La credencial de sesión es un token
+que viaja en el encabezado `Authorization: Bearer <token>`.
+
+```bash
+TOKEN=$(curl -s -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}" | jq -r .token)
+```
+
+Sin `jq`:
+
+```bash
+TOKEN=$(curl -s -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}" | sed -E 's/.*"token":"([^"]+)".*/\1/')
+```
+
+```bash
+echo "$TOKEN"
+curl -s -w ' -> %{http_code}\n' "$API/api/sesion/yo" -H "Authorization: Bearer $TOKEN"
+curl -s -w ' -> %{http_code}\n' "$API/api/sesion/yo"
+curl -s -w ' -> %{http_code}\n' "$API/api/sesion/yo" -H "Authorization: Bearer inventado"
+```
+
+| Caso | Respuesta |
+|---|---|
+| Con el token | `{"id":2,"nombre":"Tu nombre","correo":"...","rol":"Estandar"} -> 200` |
+| Sin token | `{"mensaje":"Necesitas iniciar sesión."} -> 401` |
+| Con un token inventado | `{"mensaje":"Necesitas iniciar sesión."} -> 401` |
+
+**2.3 Cerrar sesión y volver a usar la credencial (RF-CA-18).**
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/sesion/cerrar" -H "Authorization: Bearer $TOKEN"
+curl -s -w ' -> %{http_code}\n' "$API/api/sesion/yo" -H "Authorization: Bearer $TOKEN"
+```
+
+`{"mensaje":"Sesión cerrada."} -> 200`, y después `{"mensaje":"Necesitas iniciar sesión."} -> 401`.
+
+**2.4 Cinco fallos seguidos y luego la contraseña correcta (RF-CA-19).** Se prueba con Luis, para que
+tu cuenta no quede bloqueada durante el resto de la revisión.
+
+```bash
+for i in 1 2 3 4 5; do
+  curl -s -o /dev/null -w '%{http_code} ' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+    -d '{"correo":"luis@example.com","contrasena":"incorrecta1"}'
+done; echo
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"luis@example.com\",\"contrasena\":\"$CONTRASENA\"}"
+```
+
+`401 401 401 401 401`, y el sexto intento, aun con la contraseña correcta:
+`{"mensaje":"La cuenta está bloqueada temporalmente por intentos fallidos. Intenta de nuevo más tarde."} -> 423`.
+El bloqueo dura 15 minutos y se ve en la base:
+
+```bash
+sqlite3 datos/savestock.db "select Correo, IntentosFallidos, BloqueadoHasta from Usuarios where Correo='luis@example.com';"
+```
+
+**2.5 Un inicio de sesión correcto pone el contador en cero (RF-CA-19).** Con tu cuenta: cuatro fallos,
+uno correcto y otro fallo. Si el contador no se reiniciara, ese sería el quinto fallo y bloquearía la
+cuenta.
+
+```bash
+for i in 1 2 3 4; do
+  curl -s -o /dev/null -w '%{http_code} ' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+    -d "{\"correo\":\"$CORREO\",\"contrasena\":\"incorrecta1\"}"
+done; echo
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}"
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"incorrecta1\"}"
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}"
+```
+
+`401 401 401 401`, `200`, `401`, `200`: la cuenta no se bloqueó.
