@@ -1,0 +1,57 @@
+@page "/admin/usuarios"
+@model UsuariosModel
+@using SaveStock.Core.ControlAcceso.Entidades
+@{
+    ViewData["Title"] = "Administración de usuarios";
+}
+
+<h1>Administración de usuarios</h1>
+
+<partial name="_Mensaje" model="Model.Mensaje" />
+
+<div class="tabla-contenedor">
+    <table>
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Nombre</th>
+                <th>Correo</th>
+                <th>Rol</th>
+                <th>Activo</th>
+                <th>Cuenta activada</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var usuario in Model.Usuarios)
+            {
+                <tr>
+                    <td>@usuario.Id</td>
+                    <td>@usuario.Nombre</td>
+                    <td>@usuario.Correo</td>
+                    <td>@PaginaSaveStock.TextoRol(usuario.Rol)</td>
+                    <td>@(usuario.Activo ? "Sí" : "No")</td>
+                    <td>@(usuario.CuentaActivada ? "Sí" : "No")</td>
+                    <td>
+                        <form method="post" asp-page-handler="CambiarRol">
+                            <input type="hidden" name="id" value="@usuario.Id" />
+                            <select name="rol" aria-label="Rol de @usuario.Nombre">
+                                <option value="Estandar" selected="@(usuario.Rol == Rol.Estandar)">Estándar</option>
+                                <option value="Administrador" selected="@(usuario.Rol == Rol.Administrador)">Administrador</option>
+                            </select>
+                            <button type="submit" class="secundario">Cambiar rol</button>
+                        </form>
+                        <form method="post" asp-page-handler="@(usuario.Activo ? "Desactivar" : "Reactivar")">
+                            <input type="hidden" name="id" value="@usuario.Id" />
+                            <button type="submit" class="secundario">@(usuario.Activo ? "Desactivar" : "Reactivar")</button>
+                        </form>
+                        <form method="post" asp-page-handler="ForzarRestablecimiento">
+                            <input type="hidden" name="id" value="@usuario.Id" />
+                            <button type="submit" class="secundario">Forzar restablecimiento</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
