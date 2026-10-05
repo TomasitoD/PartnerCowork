@@ -1,5 +1,7 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SaveStock.Core.Comun;
+using SaveStock.Inventario.Datos;
 
 namespace SaveStock.Inventario;
 
@@ -11,7 +13,16 @@ public static class InventarioModulo
 {
     public static IServiceCollection AddSaveStockInventario(this IServiceCollection services, ConfiguracionSaveStock configuracion)
     {
-        // Pendiente (#19): registrar aquí InventarioDbContext y la máquina de estados.
+        // Como en el Core, la cadena de conexión se lee de la configuración registrada (no del
+        // parámetro) para que las pruebas puedan apuntar a una base temporal.
+        services.AddDbContext<InventarioDbContext>((proveedor, opciones) =>
+            opciones.UseSqlite(proveedor.GetRequiredService<ConfiguracionSaveStock>().CadenaConexionInventario));
+
+        // Crea datos/inventario.db y la tabla OrdenesDeCompra al iniciar.
+        services.AddHostedService<InicializadorInventario>();
+
+        // La máquina de estados (OrdenesDeCompra/MaquinaEstadosOrdenCompra) es una clase estática,
+        // como Permisos en el Core: no hace falta registrarla.
         return services;
     }
 }
