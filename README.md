@@ -385,3 +385,94 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'C
 ```
 
 `401 401 401 401`, `200`, `401`, `200`: la cuenta no se bloqueó.
+
+### 3. Roles y administración (RF-CA-04, RF-CA-05, RF-CA-06, RF-CA-08, RF-CA-20, RF-CA-21, RD-06)
+
+Todo usuario tiene exactamente un rol, `Estandar` o `Administrador` (RF-CA-04): es una columna
+obligatoria de `Usuarios` y todo registro nace `Estandar`. La exigencia de rol de cada operación se lee
+en un solo lugar, `src/SaveStock.Core/ControlAcceso/Autorizacion/Permisos.cs` (RF-CA-05), y la aplica
+del lado del servidor el filtro `src/SaveStock.Web/Filtros/FiltroOperacion.cs` antes de ejecutar cada
+endpoint.
+
+**3.1 Como Estándar, invocar operaciones de Administrador construyendo la petición a mano (RF-CA-06,
+RF-CA-08, RF-CA-21).**
+
+```bash
+TOKEN=$(curl -s -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}" | jq -r .token)
+MI_ID=$(curl -s "$API/api/sesion/yo" -H "Authorization: Bearer $TOKEN" | jq .id)
+echo "$MI_ID"
+
+curl -s -w ' -> %{http_code}\n' "$API/api/admin/usuarios" -H "Authorization: Bearer $TOKEN"
+curl -s -w ' -> %{http_code}\n' -X PUT "$API/api/admin/usuarios/$MI_ID/rol" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"rol":"Administrador"}'
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/admin/usuarios/1/desactivar" -H "Authorization: Bearer $TOKEN"
+```
+
+Las tres: `{"mensaje":"No tienes permiso para realizar esta operación."} -> 403`. Incluido el cambio
+de tu propio rol.
+
+**3.2 Como Administrador, listar usuarios (RF-CA-21).** El administrador inicial lo crea la web con
+las variables `SAVESTOCK_ADMIN_*`.
+
+```bash
+ADMIN=$(curl -s -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$ADMIN_CORREO\",\"contrasena\":\"$ADMIN_CONTRASENA\"}" | jq -r .token)
+ADMIN_ID=$(curl -s "$API/api/sesion/yo" -H "Authorization: Bearer $ADMIN" | jq .id)
+curl -s -w ' -> %{http_code}\n' "$API/api/admin/usuarios" -H "Authorization: Bearer $ADMIN"
+```
+
+`-> 200` con una lista como
+`[{"id":1,"nombre":"Admin","correo":"...","rol":"Administrador","activo":true,"cuentaActivada":true}, ...]`:
+id, nombre, correo, rol y estado. Nunca hashes ni tokens.
+
+**3.3 Cambiar un rol (RF-CA-08).**
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X PUT "$API/api/admin/usuarios/$MI_ID/rol" -H "Authorization: Bearer $ADMIN" \
+  -H 'Content-Type: application/json' -d '{"rol":"Administrador"}'
+curl -s -w ' -> %{http_code}\n' "$API/api/sesion/yo" -H "Authorization: Bearer $TOKEN"
+curl -s -w ' -> %{http_code}\n' -X PUT "$API/api/admin/usuarios/$MI_ID/rol" -H "Authorization: Bearer $ADMIN" \
+  -H 'Content-Type: application/json' -d '{"rol":"Estandar"}'
+curl -s -w ' -> %{http_code}\n' -X PUT "$API/api/admin/usuarios/$ADMIN_ID/rol" -H "Authorization: Bearer $ADMIN" \
+  -H 'Content-Type: application/json' -d '{"rol":"Estandar"}'
+```
+
+| Caso | Respuesta |
+|---|---|
+| Cambiar tu rol a Administrador | `{"mensaje":"El rol del usuario se actualizó."} -> 200` |
+| Consultar tu usuario | `{..."rol":"Administrador"} -> 200` |
+| Devolverlo a Estándar | `{"mensaje":"El rol del usuario se actualizó."} -> 200` |
+| El Administrador cambia su propio rol | `{"mensaje":"No puedes cambiar tu propio rol."} -> 400` |
+
+Un rol que no existe (`{"rol":"Jefe"}`) da `400` y un id inexistente, `404`.
+
+**3.4 Desactivar un usuario con sesión abierta y probar esa sesión (RF-CA-20).** `$TOKEN` es tu
+sesión, que sigue abierta:
+
+```bash
+curl -s -w ' -> %{http_code}\n' "$API/api/sesion/yo" -H "Authorization: Bearer $TOKEN"
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/admin/usuarios/$MI_ID/desactivar" -H "Authorization: Bearer $ADMIN"
+curl -s -w ' -> %{http_code}\n' "$API/api/sesion/yo" -H "Authorization: Bearer $TOKEN"
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}"
+```
+
+| Caso | Respuesta |
+|---|---|
+| Tu sesión antes | `{"id":...,"rol":"Estandar"} -> 200` |
+| Desactivar | `{"mensaje":"El usuario fue desactivado y sus sesiones se cerraron."} -> 200` |
+| Tu sesión después | `{"mensaje":"Necesitas iniciar sesión."} -> 401` |
+| Iniciar sesión desactivado | `{"mensaje":"La cuenta está desactivada. Contacta a un administrador."} -> 403` |
+
+**3.5 Intentar desactivarte a ti mismo y reactivar (RF-CA-20).**
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/admin/usuarios/$ADMIN_ID/desactivar" -H "Authorization: Bearer $ADMIN"
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/admin/usuarios/$MI_ID/reactivar" -H "Authorization: Bearer $ADMIN"
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}"
+```
+
+`{"mensaje":"No puedes desactivar tu propia cuenta."} -> 400`, después
+`{"mensaje":"El usuario fue reactivado."} -> 200`, y tu inicio de sesión vuelve a dar `200`.
