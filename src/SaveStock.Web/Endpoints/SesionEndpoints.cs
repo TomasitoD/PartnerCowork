@@ -41,6 +41,14 @@ public static class SesionEndpoints
         })
             .RequiereOperacion(Operacion.ConsultarUsuarioActual);
 
+        // RF-CA-18: revoca la sesión del token con el que se llamó. Después, ese token da 401.
+        app.MapPost("/api/sesion/cerrar", async (HttpContext http, ServicioInicioSesion servicio) =>
+        {
+            var resultado = await servicio.CerrarAsync(http.ObtenerTokenActual());
+            return ResultadoHttp.Mensaje(resultado.Mensaje);
+        })
+            .RequiereOperacion(Operacion.CerrarSesion);
+
         return app;
     }
 }

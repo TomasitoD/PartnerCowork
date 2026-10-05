@@ -22,6 +22,7 @@ public class ServicioInicioSesion
     public const string MensajeCuentaNoActivada = "La cuenta no está activa. Revisa tu correo para activarla.";
     public const string MensajeCuentaDesactivada = "La cuenta está desactivada. Contacta a un administrador.";
     public const string MensajeContrasenaObligatoria = "La contraseña es obligatoria.";
+    public const string MensajeSesionCerrada = "Sesión cerrada.";
 
     /// <summary>
     /// Hash de una contraseña que nadie conoce. Si el correo no existe se verifica contra este hash
@@ -115,5 +116,14 @@ public class ServicioInicioSesion
 
         var sesion = await _gestorSesiones.CrearAsync(usuario);
         return Resultado<SesionCreada>.Ok(sesion);
+    }
+
+    /// <summary>
+    /// Cierra la sesión de ese token: queda revocada y ya no sirve para ninguna operación (RF-CA-18).
+    /// </summary>
+    public async Task<Resultado> CerrarAsync(string token)
+    {
+        await _gestorSesiones.RevocarAsync(token);
+        return Resultado.Ok(MensajeSesionCerrada);
     }
 }
