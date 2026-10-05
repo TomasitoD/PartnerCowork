@@ -21,6 +21,9 @@ public class ServicioContrasenas
     public const string AsuntoRecuperacion = "Código para restablecer tu contraseña de SaveStock";
     public const string MensajeCodigoInvalido = "El código no es válido o ya venció.";
     public const string MensajeRestablecida = "Contraseña restablecida. Inicia sesión con tu contraseña nueva.";
+    public const string MensajeActualIncorrecta = "La contraseña actual no es correcta.";
+    public const string MensajeCambiada = "Contraseña actualizada. Inicia sesión de nuevo.";
+    public const string MensajeUsuarioNoEncontrado = "No existe un usuario con ese id.";
 
     private readonly CoreDbContext _db;
     private readonly IReloj _reloj;
@@ -122,6 +125,39 @@ public class ServicioContrasenas
         await _sesiones.RevocarTodasAsync(usuario.Id);
 
         return Resultado.Ok(MensajeRestablecida);
+    }
+
+    /// <summary>
+    /// Cambio de contraseña con sesión (RF-CA-22): exige la contraseña actual, aplica la política
+    /// (RF-CA-14), guarda el hash nuevo y revoca todas las sesiones del usuario, incluida la que
+    /// hizo el cambio (RF-CA-12).
+    /// </summary>
+    public async Task<Resultado> CambiarAsync(int usuarioId, SolicitudCambioContrasena solicitud)
+    {
+        var usuario = await _db.Usuarios.FindAsync(usuarioId);
+        if (usuario is null)
+        {
+            return Resultado.Error(TipoError.NoEncontrado, MensajeUsuarioNoEncontrado);
+        }
+
+        if (string.IsNullOrEmpty(solicitud.ContrasenaActual)
+            || !HasherContrasenas.Verificar(solicitud.ContrasenaActual, usuario.HashContrasena))
+        {
+            return Resultado.Error(TipoError.Validacion, MensajeActualIncorrecta);
+        }
+
+        var politica = PoliticaContrasena.Validar(solicitud.ContrasenaNueva);
+        if (!politica.Exito)
+        {
+            return politica;
+        }
+
+        usuario.HashContrasena = HasherContrasenas.Hashear(solicitud.ContrasenaNueva!);
+        usuario.IntentosFallidos = 0;
+        usuario.BloqueadoHasta = null;
+        await _sesiones.RevocarTodasAsync(usuario.Id);
+
+        return Resultado.Ok(MensajeCambiada);
     }
 
     /// <summary>

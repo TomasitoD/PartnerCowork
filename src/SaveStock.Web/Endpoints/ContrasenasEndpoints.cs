@@ -23,6 +23,11 @@ public static class ContrasenasEndpoints
                 Responder(await servicio.RestablecerAsync(solicitud)))
             .RequiereOperacion(Operacion.RestablecerContrasena);
 
+        // El usuario sale de la sesión que validó el filtro, nunca del cuerpo de la petición.
+        app.MapPut("/api/contrasena/cambiar", async (SolicitudCambioContrasena solicitud, HttpContext http, ServicioContrasenas servicio) =>
+                Responder(await servicio.CambiarAsync(http.ObtenerUsuarioActual().Id, solicitud)))
+            .RequiereOperacion(Operacion.CambiarContrasena);
+
         return app;
     }
 
