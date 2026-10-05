@@ -476,3 +476,128 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'C
 
 `{"mensaje":"No puedes desactivar tu propia cuenta."} -> 400`, después
 `{"mensaje":"El usuario fue reactivado."} -> 200`, y tu inicio de sesión vuelve a dar `200`.
+
+### 4. Contraseñas (RF-CA-09, RF-CA-10, RF-CA-11, RF-CA-12, RF-CA-13, RF-CA-22)
+
+**4.1 Pedir recuperación con un correo inexistente y con el tuyo (RF-CA-09).** Antes, abre una sesión
+para comprobar en 4.4 que deja de servir.
+
+```bash
+TOKEN_VIEJO=$(curl -s -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}" | jq -r .token)
+
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/contrasena/recuperar" -H 'Content-Type: application/json' \
+  -d '{"correo":"nadie@example.com"}'
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/contrasena/recuperar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\"}"
+```
+
+Las dos respuestas son idénticas:
+`{"mensaje":"Si el correo está registrado, te enviamos un código para restablecer tu contraseña."} -> 200`.
+Solo la segunda encola un correo.
+
+**4.2 Recibir el código (RF-CA-10, RF-NOT-08).**
+
+```bash
+dotnet run --project src/SaveStock.Enviador
+```
+
+Llega el correo «Código para restablecer tu contraseña de SaveStock» con un código de 8 caracteres que
+sirve una sola vez y vence en 15 minutos. Guárdalo en una variable, copiándolo del correo
+(`CODIGO=ABCD2345`) o leyéndolo de la cola:
+
+```bash
+CODIGO=$(sqlite3 datos/savestock.db "select Cuerpo from CorreosEnCola where Destinatario='$CORREO' order by Id desc limit 1;" | sed -n 's/^Código: //p')
+echo "$CODIGO"
+```
+
+**4.3 Usar el código y volver a usarlo (RF-CA-10, RF-CA-11).**
+
+```bash
+NUEVA=nueva5678
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/contrasena/restablecer" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"codigo\":\"$CODIGO\",\"contrasenaNueva\":\"$NUEVA\"}"
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/contrasena/restablecer" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"codigo\":\"$CODIGO\",\"contrasenaNueva\":\"otra9999\"}"
+```
+
+El primero: `{"mensaje":"Contraseña restablecida. Inicia sesión con tu contraseña nueva."} -> 200`. El
+segundo: `{"mensaje":"El código no es válido o ya venció."} -> 400`, y la contraseña no cambia. Un
+código vencido da el mismo `400`.
+
+**4.4 Contraseña vieja, contraseña nueva y una credencial emitida antes del cambio (RF-CA-11,
+RF-CA-12).**
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}"
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$NUEVA\"}"
+curl -s -w ' -> %{http_code}\n' "$API/api/sesion/yo" -H "Authorization: Bearer $TOKEN_VIEJO"
+```
+
+| Caso | Respuesta |
+|---|---|
+| Contraseña vieja | `{"mensaje":"Correo o contraseña incorrectos."} -> 401` |
+| Contraseña nueva | `{"token":"...","expiraEn":"..."} -> 200` |
+| Sesión abierta antes del restablecimiento | `{"mensaje":"Necesitas iniciar sesión."} -> 401` |
+
+**4.5 Forzar el restablecimiento como Administrador (RF-CA-13).** Se fuerza el tuyo, para que recibas
+el correo. Antes abre una sesión con tu contraseña actual:
+
+```bash
+TOKEN=$(curl -s -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$NUEVA\"}" | jq -r .token)
+
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/admin/usuarios/$MI_ID/forzar-restablecimiento" -H "Authorization: Bearer $ADMIN"
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$NUEVA\"}"
+curl -s -w ' -> %{http_code}\n' "$API/api/sesion/yo" -H "Authorization: Bearer $TOKEN"
+```
+
+| Caso | Respuesta |
+|---|---|
+| Forzar | `{"mensaje":"Se restableció la contraseña y se le envió al usuario un código para definir una nueva."} -> 200` |
+| Tu contraseña anterior | `{"mensaje":"Correo o contraseña incorrectos."} -> 401` |
+| Tu sesión abierta | `{"mensaje":"Necesitas iniciar sesión."} -> 401` |
+
+Un Estándar recibe `403` en esta operación y un id inexistente da `404`. El código llega por la cola:
+
+```bash
+dotnet run --project src/SaveStock.Enviador
+```
+
+Llega «Un administrador restableció tu contraseña de SaveStock». Con ese código defines la nueva:
+
+```bash
+CODIGO=$(sqlite3 datos/savestock.db "select Cuerpo from CorreosEnCola where Destinatario='$CORREO' order by Id desc limit 1;" | sed -n 's/^Código: //p')
+FINAL=final2468
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/contrasena/restablecer" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"codigo\":\"$CODIGO\",\"contrasenaNueva\":\"$FINAL\"}"
+```
+
+`{"mensaje":"Contraseña restablecida. Inicia sesión con tu contraseña nueva."} -> 200`.
+
+**4.6 Cambiar tu contraseña con sesión (RF-CA-22, RF-CA-14, RF-CA-12).**
+
+```bash
+TOKEN=$(curl -s -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$FINAL\"}" | jq -r .token)
+
+curl -s -w ' -> %{http_code}\n' -X PUT "$API/api/contrasena/cambiar" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"contrasenaActual":"equivocada1","contrasenaNueva":"otra9999"}'
+curl -s -w ' -> %{http_code}\n' -X PUT "$API/api/contrasena/cambiar" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d "{\"contrasenaActual\":\"$FINAL\",\"contrasenaNueva\":\"12345678\"}"
+curl -s -w ' -> %{http_code}\n' -X PUT "$API/api/contrasena/cambiar" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d "{\"contrasenaActual\":\"$FINAL\",\"contrasenaNueva\":\"otra9999\"}"
+curl -s -w ' -> %{http_code}\n' "$API/api/sesion/yo" -H "Authorization: Bearer $TOKEN"
+```
+
+| Caso | Respuesta |
+|---|---|
+| Contraseña actual incorrecta | `{"mensaje":"La contraseña actual no es correcta."} -> 400` |
+| Nueva sin letras | `{"mensaje":"La contraseña debe tener al menos 8 caracteres e incluir letras y números."} -> 400` |
+| Cambio correcto | `{"mensaje":"Contraseña actualizada. Inicia sesión de nuevo."} -> 200` |
+| La sesión con la que cambiaste | `{"mensaje":"Necesitas iniciar sesión."} -> 401` |
+
+Desde aquí tu contraseña es `otra9999`.
