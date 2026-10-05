@@ -1,0 +1,25 @@
+@page "/registro"
+@model RegistroModel
+@{
+    ViewData["Title"] = "Registro";
+}
+
+<h1>Crear una cuenta</h1>
+
+<partial name="_Mensaje" model="Model.Mensaje" />
+
+<form method="post" class="formulario">
+    <label>Nombre
+        <input asp-for="Nombre" autocomplete="name" />
+    </label>
+    <label>Correo
+        <input asp-for="Correo" type="email" autocomplete="email" />
+    </label>
+    <label>Contraseña
+        <input asp-for="Contrasena" type="password" autocomplete="new-password" />
+    </label>
+    <p class="tenue">Al menos 8 caracteres, con letras y números.</p>
+    <button type="submit">Registrarme</button>
+</form>
+
+<p><a href="/reenviar-activacion">¿No te llegó el correo de activación?</a></p>

@@ -1,0 +1,148 @@
+/* Estilos mínimos de las páginas de SaveStock. Sin dependencias externas. */
+:root {
+    --fondo: #f6f7f9;
+    --superficie: #ffffff;
+    --texto: #1f2933;
+    --tenue: #616e7c;
+    --borde: #d9dee5;
+    --primario: #1f6feb;
+    --exito-fondo: #e6f4ea;
+    --exito-texto: #1e6b34;
+    --error-fondo: #fdecea;
+    --error-texto: #a1261b;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--fondo);
+    color: var(--texto);
+    line-height: 1.5;
+}
+
+.cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--superficie);
+    border-bottom: 1px solid var(--borde);
+}
+
+.cabecera nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+}
+
+.marca {
+    font-weight: 700;
+    color: var(--texto);
+    text-decoration: none;
+}
+
+a {
+    color: var(--primario);
+}
+
+.contenido {
+    max-width: 960px;
+    margin: 1.5rem auto;
+    padding: 0 1rem;
+}
+
+h1 {
+    font-size: 1.5rem;
+}
+
+h2 {
+    font-size: 1.15rem;
+    margin-top: 2rem;
+}
+
+form.formulario {
+    display: grid;
+    gap: 0.75rem;
+    max-width: 380px;
+    padding: 1rem;
+    background: var(--superficie);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+}
+
+label {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.95rem;
+}
+
+input,
+select {
+    font: inherit;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+}
+
+button {
+    font: inherit;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--primario);
+    border-radius: 6px;
+    background: var(--primario);
+    color: #ffffff;
+    cursor: pointer;
+}
+
+button.secundario {
+    background: var(--superficie);
+    color: var(--primario);
+}
+
+.mensaje {
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+}
+
+.mensaje.exito {
+    background: var(--exito-fondo);
+    color: var(--exito-texto);
+}
+
+.mensaje.error {
+    background: var(--error-fondo);
+    color: var(--error-texto);
+}
+
+.tenue {
+    color: var(--tenue);
+}
+
+.tabla-contenedor {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--superficie);
+}
+
+th,
+td {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--borde);
+    text-align: left;
+    vertical-align: middle;
+}
+
+td form {
+    display: inline-flex;
+    gap: 0.25rem;
+    margin: 0.15rem 0;
+}

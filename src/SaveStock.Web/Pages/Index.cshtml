@@ -1,17 +1,34 @@
 @page
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SaveStock</title>
-</head>
-<body>
-    <h1>SaveStock</h1>
-    <p>Inventario para negocios pequeños.</p>
-    <ul>
-        <li><a href="/scalar">Documentación de la API (Scalar)</a></li>
-        <li><a href="/api/salud">Estado del servicio</a></li>
-    </ul>
-</body>
-</html>
+@model IndexModel
+@{
+    ViewData["Title"] = "Inicio";
+}
+
+<h1>SaveStock</h1>
+<p>Inventario para negocios pequeños.</p>
+
+@if (Model.UsuarioActual is { } usuario)
+{
+    <p>Hola, <strong>@usuario.Nombre</strong>. Tu rol es <strong>@PaginaSaveStock.TextoRol(usuario.Rol)</strong>.</p>
+}
+else
+{
+    <p class="tenue">No has iniciado sesión.</p>
+}
+
+<h2>Cuenta</h2>
+<ul>
+    <li><a href="/registro">Crear una cuenta</a></li>
+    <li><a href="/reenviar-activacion">Reenviar el enlace de activación</a></li>
+    <li><a href="/iniciar-sesion">Iniciar sesión</a></li>
+    <li><a href="/perfil">Mi perfil (cerrar sesión, cambiar contraseña)</a></li>
+    <li><a href="/contrasena/recuperar">Olvidé mi contraseña</a></li>
+    <li><a href="/contrasena/restablecer">Restablecer la contraseña con un código</a></li>
+    <li><a href="/admin/usuarios">Administración de usuarios</a></li>
+</ul>
+
+<h2>API</h2>
+<ul>
+    <li><a href="/scalar">Documentación de la API (Scalar)</a></li>
+    <li><a href="/api/salud">Estado del servicio</a></li>
+</ul>

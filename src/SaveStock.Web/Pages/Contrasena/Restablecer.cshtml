@@ -1,0 +1,25 @@
+@page "/contrasena/restablecer"
+@model RestablecerModel
+@{
+    ViewData["Title"] = "Restablecer contraseña";
+}
+
+<h1>Restablecer la contraseña</h1>
+
+<partial name="_Mensaje" model="Model.Mensaje" />
+
+<form method="post" class="formulario">
+    <label>Correo
+        <input asp-for="Correo" type="email" autocomplete="email" />
+    </label>
+    <label>Código que llegó por correo
+        <input asp-for="Codigo" autocomplete="one-time-code" />
+    </label>
+    <label>Contraseña nueva
+        <input asp-for="ContrasenaNueva" type="password" autocomplete="new-password" />
+    </label>
+    <p class="tenue">Al menos 8 caracteres, con letras y números.</p>
+    <button type="submit">Restablecer</button>
+</form>
+
+<p><a href="/iniciar-sesion">Iniciar sesión</a></p>

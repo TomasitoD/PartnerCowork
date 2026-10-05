@@ -1,0 +1,41 @@
+@page "/perfil"
+@model PerfilModel
+@{
+    ViewData["Title"] = "Mi perfil";
+}
+
+<h1>Mi perfil</h1>
+
+<partial name="_Mensaje" model="Model.Mensaje" />
+
+@if (Model.SesionTerminada)
+{
+    <p><a href="/iniciar-sesion">Iniciar sesión de nuevo</a></p>
+}
+else if (Model.UsuarioActual is { } usuario)
+{
+    <dl>
+        <dt>Nombre</dt>
+        <dd>@usuario.Nombre</dd>
+        <dt>Correo</dt>
+        <dd>@usuario.Correo</dd>
+        <dt>Rol</dt>
+        <dd>@PaginaSaveStock.TextoRol(usuario.Rol)</dd>
+    </dl>
+
+    <form method="post" asp-page-handler="CerrarSesion">
+        <button type="submit" class="secundario">Cerrar sesión</button>
+    </form>
+
+    <h2>Cambiar contraseña</h2>
+    <form method="post" asp-page-handler="CambiarContrasena" class="formulario">
+        <label>Contraseña actual
+            <input asp-for="ContrasenaActual" type="password" autocomplete="current-password" />
+        </label>
+        <label>Contraseña nueva
+            <input asp-for="ContrasenaNueva" type="password" autocomplete="new-password" />
+        </label>
+        <p class="tenue">Al cambiarla se cierran todas tus sesiones, incluida esta.</p>
+        <button type="submit">Cambiar contraseña</button>
+    </form>
+}

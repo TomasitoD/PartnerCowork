@@ -1,0 +1,21 @@
+@page "/iniciar-sesion"
+@model IniciarSesionModel
+@{
+    ViewData["Title"] = "Iniciar sesión";
+}
+
+<h1>Iniciar sesión</h1>
+
+<partial name="_Mensaje" model="Model.Mensaje" />
+
+<form method="post" class="formulario">
+    <label>Correo
+        <input asp-for="Correo" type="email" autocomplete="email" />
+    </label>
+    <label>Contraseña
+        <input asp-for="Contrasena" type="password" autocomplete="current-password" />
+    </label>
+    <button type="submit">Entrar</button>
+</form>
+
+<p><a href="/contrasena/recuperar">¿Olvidaste tu contraseña?</a></p>

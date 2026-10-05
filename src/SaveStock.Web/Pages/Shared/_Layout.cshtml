@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] - SaveStock</title>
+    <link rel="stylesheet" href="/css/sitio.css" />
+</head>
+<body>
+    <header class="cabecera">
+        <a class="marca" href="/">SaveStock</a>
+        <nav>
+            <a href="/">Inicio</a>
+            <a href="/registro">Registro</a>
+            <a href="/iniciar-sesion">Iniciar sesión</a>
+            <a href="/perfil">Mi perfil</a>
+            <a href="/admin/usuarios">Administración</a>
+        </nav>
+    </header>
+    <main class="contenido">
+        @RenderBody()
+    </main>
+</body>
+</html>
