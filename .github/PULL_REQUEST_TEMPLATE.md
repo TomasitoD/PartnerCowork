@@ -1,14 +1,18 @@
-\## Qué cambia
+## Issue
+
+Closes #
+
+## Qué cambia
 
 
 
-\## Por qué
+## Por qué
 
 
 
-\## Cómo probarlo
+## Cómo probarlo
 
 
 
-\## Qué NO incluye
+## Qué NO incluye
 
