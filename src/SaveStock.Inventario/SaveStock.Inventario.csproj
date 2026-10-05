@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- El inventario puede usar el Core; el Core nunca referencia al inventario (RD-03). -->
+  <ItemGroup>
+    <ProjectReference Include="..\SaveStock.Core\SaveStock.Core.csproj" />
+  </ItemGroup>
+
+</Project>

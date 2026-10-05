@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SaveStock.Core/SaveStock.Core.csproj" />
+    <Project Path="src/SaveStock.Enviador/SaveStock.Enviador.csproj" />
+    <Project Path="src/SaveStock.Inventario/SaveStock.Inventario.csproj" />
+    <Project Path="src/SaveStock.Web/SaveStock.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SaveStock.Tests/SaveStock.Tests.csproj" />
+  </Folder>
+</Solution>
