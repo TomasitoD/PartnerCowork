@@ -1,0 +1,16 @@
+@page "/reenviar-activacion"
+@model ReenviarActivacionModel
+@{
+    ViewData["Title"] = "Reenviar activación";
+}
+
+<h1>Reenviar el enlace de activación</h1>
+
+<partial name="_Mensaje" model="Model.Mensaje" />
+
+<form method="post" class="formulario">
+    <label>Correo
+        <input asp-for="Correo" type="email" autocomplete="email" />
+    </label>
+    <button type="submit">Enviar un enlace nuevo</button>
+</form>
