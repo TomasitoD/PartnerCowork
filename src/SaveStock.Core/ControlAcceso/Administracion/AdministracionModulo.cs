@@ -9,7 +9,7 @@ public static class AdministracionModulo
 {
     public static IServiceCollection AddAdministracion(this IServiceCollection services)
     {
-        // Pendiente (#17): registrar aquí los servicios de esta feature.
+        services.AddScoped<ServicioAdministracionUsuarios>();
         return services;
     }
 }
