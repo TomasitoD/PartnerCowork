@@ -1,26 +1,24 @@
-\# PartnerCowork
+# SaveStock
 
+## Requisitos
 
+- .NET SDK 10
 
-\## Requisitos
+## Cómo clonar
 
-\- .NET SDK 8.0 o superior
+```bash
+git clone https://github.com/TomasitoD/SaveStock.git
+cd SaveStock
+```
 
+## Cómo instalar dependencias
 
-
-\## Cómo clonar
-
-git clone https://github.com/TomasitoD/PartnerCowork.git
-
-
-
-\## Cómo instalar dependencias
-
+```bash
 dotnet restore
+```
 
+## Cómo ejecutar
 
-
-\## Cómo ejecutar
-
+```bash
 dotnet run
-
+```
