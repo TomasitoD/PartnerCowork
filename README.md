@@ -601,3 +601,119 @@ curl -s -w ' -> %{http_code}\n' "$API/api/sesion/yo" -H "Authorization: Bearer $
 | La sesión con la que cambiaste | `{"mensaje":"Necesitas iniciar sesión."} -> 401` |
 
 Desde aquí tu contraseña es `otra9999`.
+
+### 5. Correo por cola con el servidor SMTP apagado (RF-NOT-08, RF-NOT-09, RF-NOT-12, RF-NOT-13)
+
+La web nunca se conecta al servidor SMTP: solo encola. Para simular que el servidor no responde, el
+enviador se ejecuta con `SMTP_HOST` apuntando a un servidor que no existe. La variable del comando gana
+sobre la del `.env`, así que tu configuración real no cambia.
+
+**5.1 Registrar un usuario con el SMTP apagado.** También se pide una recuperación de tu correo, para
+ver después que te llega una sola vez.
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/cuentas/registro" -H 'Content-Type: application/json' \
+  -d "{\"nombre\":\"Sin SMTP\",\"correo\":\"sinsmtp@example.com\",\"contrasena\":\"$CONTRASENA\"}"
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/contrasena/recuperar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\"}"
+sqlite3 datos/savestock.db "select Id, Destinatario, Estado, Intentos, FechaEnvio, UltimoError from CorreosEnCola where Estado <> 'Enviado';"
+```
+
+El registro termina bien (`-> 201`) y los dos correos quedan en la cola como `Pendiente`, con
+`Intentos` en `0`.
+
+**5.2 Ejecutar el enviador dos veces sin servidor.**
+
+```bash
+SMTP_HOST=smtp.invalido dotnet run --project src/SaveStock.Enviador
+SMTP_HOST=smtp.invalido dotnet run --project src/SaveStock.Enviador
+sqlite3 datos/savestock.db "select Id, Destinatario, Estado, Intentos, FechaEnvio, UltimoError from CorreosEnCola where Estado <> 'Enviado';"
+```
+
+Cada ejecución imprime, por cada correo,
+`No se pudo enviar el correo N a sinsmtp@example.com: No se pudo conectar con el servidor SMTP smtp.invalido:587. Queda Pendiente.`
+y termina con `Enviados: 0, fallidos: 2, pendientes: 2` (más, si quedaban otros pendientes de antes).
+En la base siguen `Pendiente`, con `Intentos` en `2` y el error en `UltimoError`. Nada se perdió y no
+hubo traza.
+
+**5.3 Volver a encender el servidor y ejecutar el enviador dos veces.**
+
+```bash
+dotnet run --project src/SaveStock.Enviador
+dotnet run --project src/SaveStock.Enviador
+sqlite3 datos/savestock.db "select Id, Destinatario, Estado, Intentos, FechaEnvio from CorreosEnCola;"
+```
+
+La primera ejecución: `Enviados: 2, fallidos: 0, pendientes: 0`. La segunda:
+`Enviados: 0, fallidos: 0, pendientes: 0`, porque solo toma los `Pendiente` (RF-NOT-12). Todos los
+correos quedan `Enviado` con su `FechaEnvio`, y el código de recuperación te llega **una sola vez**.
+
+**5.4 Credenciales fuera del repositorio (RF-NOT-13, RD-10).**
+
+```bash
+SMTP_HOST= dotnet run --project src/SaveStock.Enviador; echo "código de salida: $?"
+git ls-files | grep -i env
+git log --all --oneline -- .env
+```
+
+Con `SMTP_HOST` vacía, el enviador responde
+`Falta configurar SMTP_HOST. Agrégalas al archivo .env (mira .env.example) o como variables de entorno.`
+y `código de salida: 1`: las credenciales solo salen del entorno o del `.env`. En el repositorio solo está `.env.example`, sin valores, y el `.env` nunca se
+subió (el `git log` sale vacío).
+
+### 6. Reiniciar la aplicación (RD-09)
+
+En la terminal de la web, detenla con `Ctrl+C` y vuelve a arrancarla:
+
+```bash
+dotnet run --project src/SaveStock.Web
+```
+
+```bash
+sqlite3 datos/savestock.db "select Id, Correo, Rol, Activo from Usuarios;"
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"otra9999\"}"
+```
+
+Siguen todos los usuarios (el administrador inicial no se duplica) y tu inicio de sesión responde
+`200`: los datos viven en `datos/savestock.db`, fuera del proceso.
+
+### 7. Máquina de estados de la orden de compra (RF-NEG-03, RF-NEG-04, RF-NEG-05, RD-04)
+
+La tabla de transiciones (desde, hacia, quién la ejecuta, condición) está en
+[`docs/maquina-de-estados.md`](docs/maquina-de-estados.md). En el código:
+
+| Qué | Dónde |
+|---|---|
+| Entidad central `OrdenDeCompra`, con su atributo `Estado` | `src/SaveStock.Inventario/OrdenesDeCompra/OrdenDeCompra.cs` |
+| Los 4 estados (Borrador, Enviada, Recibida, Cancelada), en un solo lugar (RF-NEG-03) | `src/SaveStock.Inventario/OrdenesDeCompra/EstadoOrdenCompra.cs` |
+| Transiciones permitidas, la prohibida explícita Recibida → Borrador (RF-NEG-04) y los estados terminales Recibida y Cancelada (RF-NEG-05), en un solo punto (RD-04) | `src/SaveStock.Inventario/OrdenesDeCompra/MaquinaEstadosOrdenCompra.cs` |
+| Tabla `OrdenesDeCompra` en `datos/inventario.db` | `src/SaveStock.Inventario/Datos/InventarioDbContext.cs` |
+
+```bash
+sqlite3 datos/inventario.db ".schema OrdenesDeCompra"
+```
+
+## Dónde está cada cosa
+
+| Requisito | Archivo |
+|---|---|
+| RF-CA-01, RF-CA-15, RF-CA-16, RF-CA-17 (registro, activación, reenvío) | `src/SaveStock.Core/ControlAcceso/Registro/ServicioRegistro.cs` |
+| RF-CA-02, RD-05 (hash con sal) | `src/SaveStock.Core/ControlAcceso/Seguridad/HasherContrasenas.cs` |
+| RF-CA-14 (política de contraseña) | `src/SaveStock.Core/ControlAcceso/Seguridad/PoliticaContrasena.cs` |
+| RD-07 (validación de entradas) | `src/SaveStock.Core/Comun/ValidadorEntrada.cs` |
+| RF-CA-03, RF-CA-18, RF-CA-19 (inicio y cierre de sesión, bloqueo) | `src/SaveStock.Core/ControlAcceso/InicioSesion/ServicioInicioSesion.cs` |
+| RF-CA-07, RF-CA-12 (validar y revocar sesiones) | `src/SaveStock.Core/ControlAcceso/Sesiones/GestorSesiones.cs` |
+| RF-CA-04 (dos roles, uno por usuario) | `src/SaveStock.Core/ControlAcceso/Entidades/Rol.cs` y `Usuario.cs` |
+| **RF-CA-05 (exigencia de rol de cada operación, en un solo lugar)** | **`src/SaveStock.Core/ControlAcceso/Autorizacion/Permisos.cs`** |
+| RF-CA-06, RD-06 (rechazo del lado del servidor) | `src/SaveStock.Web/Filtros/FiltroOperacion.cs` y `src/SaveStock.Core/ControlAcceso/Autorizacion/Autorizador.cs` |
+| RF-CA-08, RF-CA-20, RF-CA-21 (cambio de rol, desactivación, listado) | `src/SaveStock.Core/ControlAcceso/Administracion/ServicioAdministracionUsuarios.cs` |
+| RF-CA-09 a RF-CA-13, RF-CA-22 (recuperación, restablecimiento, cambio) | `src/SaveStock.Core/ControlAcceso/Contrasenas/ServicioContrasenas.cs` |
+| RF-NOT-08 (encolar el correo) | `src/SaveStock.Core/Correo/CorreoCola.cs` y `CorreoEnCola.cs` |
+| RF-NOT-09, RF-NOT-12 (enviador independiente, sin duplicados) | `src/SaveStock.Core/Correo/ProcesadorColaCorreos.cs` y `src/SaveStock.Enviador/` |
+| RF-NOT-13, RD-10 (configuración por variables de entorno) | `src/SaveStock.Core/Comun/ConfiguracionSaveStock.cs` y `.env.example` |
+| RD-08 (errores sin detalles internos) | `src/SaveStock.Web/Errores/ManejoErrores.cs` |
+| RD-09 (persistencia en SQLite) | `src/SaveStock.Core/Datos/CoreDbContext.cs` |
+| RD-11 (fechas en UTC con un solo reloj) | `src/SaveStock.Core/Comun/IReloj.cs` |
+| RD-12 (pruebas sin levantar la aplicación) | `tests/SaveStock.Tests/Unitarias/` |
+| Endpoints (solo traducen HTTP, RD-02) | `src/SaveStock.Web/Endpoints/` |
