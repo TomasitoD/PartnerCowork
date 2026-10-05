@@ -717,3 +717,37 @@ sqlite3 datos/inventario.db ".schema OrdenesDeCompra"
 | RD-11 (fechas en UTC con un solo reloj) | `src/SaveStock.Core/Comun/IReloj.cs` |
 | RD-12 (pruebas sin levantar la aplicación) | `tests/SaveStock.Tests/Unitarias/` |
 | Endpoints (solo traducen HTTP, RD-02) | `src/SaveStock.Web/Endpoints/` |
+
+## Estructura del proyecto
+
+Una sola solución (`SaveStock.slnx`) con cuatro proyectos y uno de pruebas. Cada uno tiene una
+responsabilidad (RD-01) y la dependencia va en un solo sentido: el Core no referencia al inventario
+(RD-03), así que se construye y funciona sin él.
+
+| Proyecto | Qué hace | Depende de |
+|---|---|---|
+| `src/SaveStock.Core` | Biblioteca del Core: control de acceso (registro, sesión, roles, contraseñas), cola de correos, seguridad y datos (`datos/savestock.db`). Toda la lógica de negocio vive aquí (RD-02). | — |
+| `src/SaveStock.Inventario` | Módulo de negocio: la orden de compra y su máquina de estados, con su propia base (`datos/inventario.db`). | — |
+| `src/SaveStock.Web` | Aplicación ASP.NET Core: la API en `/api`, las páginas y la documentación en `/scalar`. Solo traduce HTTP a llamadas a los servicios y aplica los permisos. | Core, Inventario |
+| `src/SaveStock.Enviador` | Consola aparte que manda por SMTP los correos pendientes de la cola y termina (RF-NOT-09). | Core |
+| `tests/SaveStock.Tests` | Pruebas xUnit: unitarias de los servicios del Core e integración de la API. | Core, Web |
+
+```text
+SaveStock.slnx
+Directory.Build.props      configuración común (net10.0, versión)
+.env.example               nombres de las variables de entorno, sin valores
+docs/                      maquina-de-estados.md
+src/SaveStock.Core/        Comun/, ControlAcceso/, Correo/, Datos/
+src/SaveStock.Inventario/  OrdenesDeCompra/, Datos/
+src/SaveStock.Web/         Endpoints/, Filtros/, Errores/, Pages/
+src/SaveStock.Enviador/
+tests/SaveStock.Tests/     Unitarias/, Integracion/, Apoyo/
+```
+
+## Entrega
+
+Lo que se califica es la etiqueta `practica-1` (versión `1.0.0`):
+
+```bash
+git checkout practica-1
+```
