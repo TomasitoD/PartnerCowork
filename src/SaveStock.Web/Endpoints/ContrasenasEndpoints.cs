@@ -19,6 +19,10 @@ public static class ContrasenasEndpoints
                 Responder(await servicio.IniciarRecuperacionAsync(solicitud)))
             .RequiereOperacion(Operacion.IniciarRecuperacion);
 
+        app.MapPost("/api/contrasena/restablecer", async (SolicitudRestablecimiento solicitud, ServicioContrasenas servicio) =>
+                Responder(await servicio.RestablecerAsync(solicitud)))
+            .RequiereOperacion(Operacion.RestablecerContrasena);
+
         return app;
     }
 

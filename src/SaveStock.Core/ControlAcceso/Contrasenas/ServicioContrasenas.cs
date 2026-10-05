@@ -19,6 +19,8 @@ public class ServicioContrasenas
 
     public const string MensajeRecuperacion = "Si el correo está registrado, te enviamos un código para restablecer tu contraseña.";
     public const string AsuntoRecuperacion = "Código para restablecer tu contraseña de SaveStock";
+    public const string MensajeCodigoInvalido = "El código no es válido o ya venció.";
+    public const string MensajeRestablecida = "Contraseña restablecida. Inicia sesión con tu contraseña nueva.";
 
     private readonly CoreDbContext _db;
     private readonly IReloj _reloj;
@@ -62,6 +64,64 @@ public class ServicioContrasenas
         }
 
         return Resultado.Ok(MensajeRecuperacion);
+    }
+
+    /// <summary>
+    /// Define la contraseña nueva con un código válido (RF-CA-10, RF-CA-11, RF-CA-12): el código
+    /// coincide, es del usuario de ese correo, no se usó, no se invalidó y no venció. Lo marca como
+    /// usado, guarda el hash nuevo, limpia el bloqueo y revoca todas las sesiones. Si el código no
+    /// sirve, la contraseña no cambia.
+    /// </summary>
+    public async Task<Resultado> RestablecerAsync(SolicitudRestablecimiento solicitud)
+    {
+        var validacion = ValidadorEntrada.ValidarCorreo(solicitud.Correo);
+        if (!validacion.Exito)
+        {
+            return validacion;
+        }
+
+        var politica = PoliticaContrasena.Validar(solicitud.ContrasenaNueva);
+        if (!politica.Exito)
+        {
+            return politica;
+        }
+
+        if (string.IsNullOrWhiteSpace(solicitud.Codigo))
+        {
+            return Resultado.Error(TipoError.Validacion, MensajeCodigoInvalido);
+        }
+
+        var correo = ValidadorEntrada.NormalizarCorreo(solicitud.Correo!);
+        var usuario = await _db.Usuarios.SingleOrDefaultAsync(u => u.Correo == correo);
+        if (usuario is null)
+        {
+            // Mismo mensaje que un código incorrecto: no revela si el correo existe.
+            return Resultado.Error(TipoError.Validacion, MensajeCodigoInvalido);
+        }
+
+        // El código se escribe en mayúsculas en el correo; aceptamos que lo peguen en minúsculas o con espacios.
+        var hash = GeneradorTokens.CalcularHash(solicitud.Codigo.Trim().ToUpperInvariant());
+        var ahora = _reloj.AhoraUtc;
+        var codigo = await _db.CodigosRecuperacion.FirstOrDefaultAsync(c =>
+            c.UsuarioId == usuario.Id
+            && c.HashCodigo == hash
+            && !c.Usado
+            && !c.Invalidado
+            && c.FechaVencimiento > ahora);
+        if (codigo is null)
+        {
+            return Resultado.Error(TipoError.Validacion, MensajeCodigoInvalido);
+        }
+
+        codigo.Usado = true;
+        usuario.HashContrasena = HasherContrasenas.Hashear(solicitud.ContrasenaNueva!);
+        usuario.IntentosFallidos = 0;
+        usuario.BloqueadoHasta = null;
+
+        // RevocarTodasAsync usa el mismo contexto: su SaveChanges guarda también lo anterior.
+        await _sesiones.RevocarTodasAsync(usuario.Id);
+
+        return Resultado.Ok(MensajeRestablecida);
     }
 
     /// <summary>
