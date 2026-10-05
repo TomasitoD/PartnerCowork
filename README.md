@@ -134,6 +134,9 @@ Las secciones siguen el orden de la revisión de la Práctica 1 y se hacen una d
 corriendo en una terminal y los comandos en otra. Cada `curl` imprime el cuerpo de la respuesta y, al
 final, `-> <código HTTP>`. Debajo de cada bloque está lo que tiene que responder.
 
+Las mismas peticiones, en el mismo orden, están en [`pruebas/practica-1.http`](pruebas/practica-1.http)
+para usarlas desde VS Code (extensión REST Client), Rider o Visual Studio.
+
 ### Preparación
 
 1. Completa el `.env` con el administrador inicial (`SAVESTOCK_ADMIN_*`) y un servidor SMTP real
