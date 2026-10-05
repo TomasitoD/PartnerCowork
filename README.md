@@ -127,3 +127,171 @@ Hay pruebas unitarias de los servicios del Core que no levantan la web (RD-12) y
 que levantan la API en memoria con una base SQLite temporal. Cubren también lo que no se puede provocar
 a mano en pocos minutos: el vencimiento del bloqueo (15 minutos), del código de recuperación
 (15 minutos) y del enlace de activación (24 horas).
+
+## Cómo verificar cada criterio
+
+Las secciones siguen el orden de la revisión de la Práctica 1 y se hacen una detrás de otra, con la web
+corriendo en una terminal y los comandos en otra. Cada `curl` imprime el cuerpo de la respuesta y, al
+final, `-> <código HTTP>`. Debajo de cada bloque está lo que tiene que responder.
+
+### Preparación
+
+1. Completa el `.env` con el administrador inicial (`SAVESTOCK_ADMIN_*`) y un servidor SMTP real
+   (`SMTP_*`), y arranca la web: `dotnet run --project src/SaveStock.Web`.
+2. En la terminal donde vas a probar, define estas variables. `CORREO` es **tu correo real, en
+   minúsculas**: ahí llegan el enlace de activación y los códigos. Los `ADMIN_*` son los mismos valores
+   que pusiste en `SAVESTOCK_ADMIN_CORREO` y `SAVESTOCK_ADMIN_CONTRASENA`.
+
+   ```bash
+   API=http://localhost:5080
+   CORREO=tu-correo@gmail.com
+   CONTRASENA=clave1234
+   ADMIN_CORREO=admin@tu-negocio.com
+   ADMIN_CONTRASENA=la-del-env-1
+   ```
+
+Los demás usuarios de las pruebas usan el dominio reservado `example.com`: sus correos no llegan a
+nadie, así que sus enlaces y códigos se leen de la cola con `sqlite3`.
+
+**Si un correo tarda en llegar**, puedes leerlo directamente de la cola (la tabla `CorreosEnCola`
+guarda el cuerpo del correo):
+
+```bash
+sqlite3 datos/savestock.db "select Id, Destinatario, Asunto, Estado from CorreosEnCola;"
+sqlite3 datos/savestock.db "select Cuerpo from CorreosEnCola where Destinatario='$CORREO' order by Id desc limit 1;"
+```
+
+**Sin `jq`:** donde diga `jq -r .token` usa `sed -E 's/.*"token":"([^"]+)".*/\1/'`, y donde diga
+`jq .id` usa `sed -E 's/.*"id":([0-9]+).*/\1/'`.
+
+### 1. Registro y activación (RF-CA-01, RF-CA-02, RF-CA-14, RF-CA-15, RF-CA-16, RF-CA-17)
+
+**1.1 Registrarte con tu propio correo (RF-CA-15).**
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/cuentas/registro" -H 'Content-Type: application/json' \
+  -d "{\"nombre\":\"Tu nombre\",\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}"
+```
+
+`{"mensaje":"Te enviamos un correo para activar tu cuenta."} -> 201`. El usuario nace inactivo y el
+correo queda `Pendiente` en la cola; todavía no salió.
+
+**1.2 Iniciar sesión antes de activar (RF-CA-15).**
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/sesion/iniciar" -H 'Content-Type: application/json' \
+  -d "{\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}"
+```
+
+`{"mensaje":"La cuenta no está activa. Revisa tu correo para activarla."} -> 403`.
+
+**1.3 Mandar el correo y abrir el enlace (RF-CA-16, RF-NOT-08).** En otra terminal, desde la raíz:
+
+```bash
+dotnet run --project src/SaveStock.Enviador
+```
+
+`Enviados: 1, fallidos: 0, pendientes: 0`. Llega a tu bandeja el correo «Activa tu cuenta de
+SaveStock». Abre el enlace en el navegador: la página dice **«Tu cuenta fue activada. Ya puedes iniciar
+sesión.»** (HTTP 200).
+
+Para hacerlo desde la terminal, guarda el enlace en una variable (el mismo del correo, leído de la
+cola) y ábrelo con `curl`:
+
+```bash
+ENLACE=$(sqlite3 datos/savestock.db "select Cuerpo from CorreosEnCola where Destinatario='$CORREO' order by Id desc limit 1;" | grep -o 'http[^ ]*activar?token=[A-Za-z0-9_-]*')
+echo "$ENLACE"
+curl -s -w ' -> %{http_code}\n' "$ENLACE"
+```
+
+**1.4 Abrir el enlace por segunda vez (RF-CA-16).** Recarga la página o:
+
+```bash
+curl -s -w ' -> %{http_code}\n' "$ENLACE"
+```
+
+La página dice **«El enlace no es válido, ya fue usado o venció.»** (HTTP 400) y la cuenta sigue
+activada. Ahora el inicio de sesión de 1.2 responde `200` con `{"token":"...","expiraEn":"..."}`.
+
+**1.5 Registrar el mismo correo otra vez (RF-CA-01).** También con otras mayúsculas: el correo se
+guarda normalizado.
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/cuentas/registro" -H 'Content-Type: application/json' \
+  -d "{\"nombre\":\"Otra vez\",\"correo\":\"$CORREO\",\"contrasena\":\"$CONTRASENA\"}"
+```
+
+`{"mensaje":"Ya existe una cuenta con ese correo."} -> 409`.
+
+**1.6 Reenviar el enlace (RF-CA-17).** Se prueba con un segundo usuario, Luis, que todavía no activó su
+cuenta. Luis usa **la misma contraseña que tú** (sirve para 1.9).
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/cuentas/registro" -H 'Content-Type: application/json' \
+  -d "{\"nombre\":\"Luis\",\"correo\":\"luis@example.com\",\"contrasena\":\"$CONTRASENA\"}"
+ENLACE_VIEJO=$(sqlite3 datos/savestock.db "select Cuerpo from CorreosEnCola where Destinatario='luis@example.com' order by Id desc limit 1;" | grep -o 'http[^ ]*activar?token=[A-Za-z0-9_-]*')
+
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/cuentas/reenviar-activacion" -H 'Content-Type: application/json' \
+  -d '{"correo":"luis@example.com"}'
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/cuentas/reenviar-activacion" -H 'Content-Type: application/json' \
+  -d '{"correo":"nadie@example.com"}'
+```
+
+Las dos respuestas son idénticas, exista o no el correo:
+`{"mensaje":"Si el correo está registrado y la cuenta no está activa, te enviamos un nuevo enlace."} -> 200`.
+Solo el de Luis encola un correo nuevo. El reenvío invalida el enlace anterior:
+
+```bash
+ENLACE_NUEVO=$(sqlite3 datos/savestock.db "select Cuerpo from CorreosEnCola where Destinatario='luis@example.com' order by Id desc limit 1;" | grep -o 'http[^ ]*activar?token=[A-Za-z0-9_-]*')
+curl -s -w ' -> %{http_code}\n' "$ENLACE_VIEJO"
+curl -s -w ' -> %{http_code}\n' "$ENLACE_NUEVO"
+```
+
+El viejo: «El enlace no es válido, ya fue usado o venció.» `-> 400`. El nuevo: «Tu cuenta fue
+activada. Ya puedes iniciar sesión.» `-> 200`.
+
+**1.7 Enlace vencido (RF-CA-16), opcional.** El enlace vence a las 24 horas. Para no esperar, se vence a
+mano en la base:
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/cuentas/registro" -H 'Content-Type: application/json' \
+  -d "{\"nombre\":\"Marta\",\"correo\":\"marta@example.com\",\"contrasena\":\"$CONTRASENA\"}"
+ENLACE_MARTA=$(sqlite3 datos/savestock.db "select Cuerpo from CorreosEnCola where Destinatario='marta@example.com' order by Id desc limit 1;" | grep -o 'http[^ ]*activar?token=[A-Za-z0-9_-]*')
+sqlite3 datos/savestock.db "update TokensActivacion set FechaVencimiento='2020-01-01 00:00:00' where UsuarioId=(select Id from Usuarios where Correo='marta@example.com');"
+curl -s -w ' -> %{http_code}\n' "$ENLACE_MARTA"
+sqlite3 datos/savestock.db "select Correo, Activo, FechaActivacion from Usuarios where Correo='marta@example.com';"
+```
+
+«El enlace no es válido, ya fue usado o venció.» `-> 400`, y Marta sigue con `Activo` en `0` y sin
+`FechaActivacion`.
+
+**1.8 Contraseña de 5 caracteres y correo mal formado (RF-CA-14, RD-07).**
+
+```bash
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/cuentas/registro" -H 'Content-Type: application/json' \
+  -d '{"nombre":"Pedro","correo":"pedro@example.com","contrasena":"ab123"}'
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/cuentas/registro" -H 'Content-Type: application/json' \
+  -d '{"nombre":"Pedro","correo":"pedro@","contrasena":"clave1234"}'
+curl -s -w ' -> %{http_code}\n' -X POST "$API/api/cuentas/registro" -H 'Content-Type: application/json' \
+  -d '{"nombre":"Pedro","correo":"","contrasena":"clave1234"}'
+```
+
+| Caso | Respuesta |
+|---|---|
+| Contraseña de 5 caracteres | `{"mensaje":"La contraseña debe tener al menos 8 caracteres e incluir letras y números."} -> 400` |
+| Correo mal formado | `{"mensaje":"El correo no tiene un formato válido."} -> 400` |
+| Correo vacío | `{"mensaje":"El correo es obligatorio."} -> 400` |
+
+Una contraseña de 8 letras sin números (`"solamenteletras"`) también da el mensaje de la política, y un
+JSON roto da `{"mensaje":"La solicitud no es válida."} -> 400`. Nunca se ve una traza (RD-08).
+
+**1.9 Leer el almacenamiento (RF-CA-02, RD-05).**
+
+```bash
+sqlite3 datos/savestock.db "select Correo, HashContrasena from Usuarios;"
+```
+
+Ninguna fila contiene la contraseña (`$CONTRASENA`). El valor guardado tiene la forma
+`pbkdf2-sha256$100000$<sal>$<hash>`: PBKDF2-SHA256 con 100.000 iteraciones y una sal aleatoria de
+16 bytes por usuario, que no se puede revertir a la contraseña. **Tu fila y la de Luis tienen la misma
+contraseña y valores distintos**, porque cada una tiene su propia sal.
