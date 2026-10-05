@@ -8,14 +8,16 @@ using SaveStock.Core.Datos;
 namespace SaveStock.Core.ControlAcceso.Registro;
 
 /// <summary>
-/// Registro de cuentas (RF-CA-01, RF-CA-02, RF-CA-14, RF-CA-15). El correo de activación
-/// se deja en la cola: esta operación nunca habla con el servidor SMTP.
+/// Registro de cuentas (RF-CA-01, RF-CA-02, RF-CA-14, RF-CA-15) y activación por enlace
+/// (RF-CA-16). El correo de activación se deja en la cola: esta operación nunca habla con el servidor SMTP.
 /// </summary>
 public class ServicioRegistro
 {
     public const string MensajeRegistrado = "Te enviamos un correo para activar tu cuenta.";
     public const string MensajeCorreoDuplicado = "Ya existe una cuenta con ese correo.";
     public const string AsuntoActivacion = "Activa tu cuenta de SaveStock";
+    public const string MensajeCuentaActivada = "Tu cuenta fue activada. Ya puedes iniciar sesión.";
+    public const string MensajeEnlaceInvalido = "El enlace no es válido, ya fue usado o venció.";
 
     /// <summary>Cuánto dura el enlace de activación desde que se emite.</summary>
     public static readonly TimeSpan VigenciaTokenActivacion = TimeSpan.FromHours(24);
@@ -73,6 +75,42 @@ public class ServicioRegistro
         await transaccion.CommitAsync();
 
         return Resultado.Ok(MensajeRegistrado);
+    }
+
+    /// <summary>
+    /// Activa la cuenta con el token del enlace (RF-CA-16). El token sirve una sola vez y solo
+    /// antes de vencer; si no es válido, no se cambia nada.
+    /// </summary>
+    public async Task<Resultado> ActivarAsync(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return Resultado.Error(TipoError.Validacion, MensajeEnlaceInvalido);
+        }
+
+        // En la base solo está el hash: se busca por el hash del token recibido.
+        var hash = GeneradorTokens.CalcularHash(token);
+        var tokenActivacion = await _db.TokensActivacion
+            .Include(t => t.Usuario)
+            .SingleOrDefaultAsync(t => t.HashToken == hash);
+
+        var ahora = _reloj.AhoraUtc;
+        var esValido = tokenActivacion is not null
+            && !tokenActivacion.Usado
+            && !tokenActivacion.Invalidado
+            && tokenActivacion.FechaVencimiento > ahora;
+
+        if (!esValido)
+        {
+            return Resultado.Error(TipoError.Validacion, MensajeEnlaceInvalido);
+        }
+
+        tokenActivacion!.Usado = true;
+        tokenActivacion.Usuario.Activo = true;
+        tokenActivacion.Usuario.FechaActivacion = ahora;
+        await _db.SaveChangesAsync();
+
+        return Resultado.Ok(MensajeCuentaActivada);
     }
 
     private static Resultado Validar(SolicitudRegistro solicitud)
